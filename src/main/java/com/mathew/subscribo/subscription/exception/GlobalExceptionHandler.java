@@ -1,6 +1,6 @@
-package com.mathew.customer.exception;
+package com.mathew.subscribo.subscription.exception;
 
-import com.mathew.customer.model.error.ApiErrorResponse;
+import com.mathew.subscribo.subscription.model.error.ApiErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -20,8 +20,8 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.CONFLICT).body(error);
     }
 
-    @ExceptionHandler(CustomerNotFoundException.class)
-    public ResponseEntity<ApiErrorResponse> handleDotExists(CustomerNotFoundException ex) {
+    @ExceptionHandler(PlanNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleDotExists(PlanNotFoundException ex) {
 
         ApiErrorResponse error = new ApiErrorResponse(
                 HttpStatus.NOT_FOUND.value(),

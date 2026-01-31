@@ -1,4 +1,4 @@
-package com.mathew.customer.exception;
+package com.mathew.subscribo.subscription.exception;
 
 public class ConflictException extends RuntimeException{
     public ConflictException (String message){
