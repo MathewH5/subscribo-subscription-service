@@ -1,2 +1,4 @@
-package com.mathew.subscribo.subscription.model;public class ChangeSubscriptionPlanResponseDTO {
+package com.mathew.subscribo.subscription.model;
+
+public record ChangeSubscriptionPlanResponse () {
 }

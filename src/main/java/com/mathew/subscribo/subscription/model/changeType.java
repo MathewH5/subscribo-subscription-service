@@ -1,2 +1,6 @@
-package com.mathew.subscribo.subscription.model;public enum changeType {
+package com.mathew.subscribo.subscription.model;
+
+public enum changeType {
+    UPGRADE,
+    DOWNGRADE
 }

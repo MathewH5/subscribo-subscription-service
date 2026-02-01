@@ -24,6 +24,7 @@ public class PlanEntity {
     @Column(nullable = false)
     private BigDecimal price;
 
+    @Enumerated(EnumType.STRING)
     @Column (name= "billing_cycle", nullable = false)
     private BillingCycle billingCycle;
 
@@ -38,6 +39,10 @@ public class PlanEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
     }
 
     public LocalDateTime getCreatedAt() {
