@@ -17,5 +17,5 @@ spring:
         format_sql: true
     open-in-view: false
 
-  server:
-    port: 8081
+server:
+  port: 8081
