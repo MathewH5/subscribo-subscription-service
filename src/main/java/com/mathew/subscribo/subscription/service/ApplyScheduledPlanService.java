@@ -19,23 +19,28 @@ public class ApplyScheduledPlanService {
     private final SubscriptionJpaRepositoryRead subscriptionRead;
     private final SubscriptionJpaRepositoryWrite subscriptionWrite;
     private final SubscriptionChangeJpaRepositoryRead subscriptionChangeRead;
+    private final SubscriptionChangeJpaRepositoryWrite subscriptionChangeJpaRepositoryWrite;
     private final Logger log = LoggerFactory.getLogger(ApplyScheduledPlanService.class);
 
     public ApplyScheduledPlanService(
             SubscriptionJpaRepositoryRead subscriptionRead,
             SubscriptionJpaRepositoryWrite subscriptionWrite,
-            SubscriptionChangeJpaRepositoryRead subscriptionChangeRead
+            SubscriptionChangeJpaRepositoryRead subscriptionChangeRead, SubscriptionChangeJpaRepositoryWrite subscriptionChangeJpaRepositoryWrite
     ) {
         this.subscriptionRead = subscriptionRead;
         this.subscriptionWrite = subscriptionWrite;
         this.subscriptionChangeRead = subscriptionChangeRead;
+        this.subscriptionChangeJpaRepositoryWrite = subscriptionChangeJpaRepositoryWrite;
     }
     public void execute (){
         List<SubscriptionChangeEntity> pending = subscriptionChangeRead.findAllPending(LocalDateTime.now());
 
-
         for (SubscriptionChangeEntity change : pending) {
-            applyChange(change);
+            try {
+                applyChange(change);
+            }catch (Exception e){
+                log.error("Failed to apply change | changeId={} | error={}", change.getId(), e.getMessage());
+            }
         }
 
     }
@@ -52,6 +57,7 @@ public class ApplyScheduledPlanService {
         subscriptionWrite.save(subscription);
 
         change.markAsApplied();
+        subscriptionChangeJpaRepositoryWrite.save(change);
 
         log.info(
                 "Applied scheduled plan change | subscriptionId={} | newPlanId={}",

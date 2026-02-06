@@ -104,11 +104,13 @@ public class ChangeSubscriptionPlanService {
         SubscriptionEntity saved = subscriptionRepositoryWrite.save(entitySubscription);
 
         SubscriptionChangeEntity subscriptionChangeEntity = new SubscriptionChangeEntity();
-        subscriptionChangeEntity.setChangedAt(LocalDateTime.now());
+        subscriptionChangeEntity.setChangedAt(entitySubscription.getNextBillingDate());
         subscriptionChangeEntity.setSubscriptionId(entitySubscription.getId());
         subscriptionChangeEntity.setChangeType(DOWNGRADE);
         subscriptionChangeEntity.setOldPlanId(entitySubscription.getPlanId());
         subscriptionChangeEntity.setNewPlanId(entitySubscription.getScheduledPlanId());
+        subscriptionChangeEntity.setNewBillingCycle(entityNewPlan.getBillingCycle());
+        subscriptionChangeEntity.setNewPrice(entityNewPlan.getPrice());
 
         subscriptionChangeRepositoryWrite.save(subscriptionChangeEntity);
 
