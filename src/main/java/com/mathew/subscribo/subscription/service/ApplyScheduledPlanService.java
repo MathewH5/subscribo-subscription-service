@@ -7,6 +7,10 @@ import com.mathew.subscribo.subscription.repository.SubscriptionChangeJpaReposit
 import com.mathew.subscribo.subscription.repository.SubscriptionChangeJpaRepositoryWrite;
 import com.mathew.subscribo.subscription.repository.SubscriptionJpaRepositoryRead;
 import com.mathew.subscribo.subscription.repository.SubscriptionJpaRepositoryWrite;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
+import jakarta.transaction.Transactional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -16,53 +20,64 @@ import java.util.List;
 
 @Service
 public class ApplyScheduledPlanService {
-    private final SubscriptionJpaRepositoryRead subscriptionRead;
-    private final SubscriptionJpaRepositoryWrite subscriptionWrite;
+
     private final SubscriptionChangeJpaRepositoryRead subscriptionChangeRead;
-    private final SubscriptionChangeJpaRepositoryWrite subscriptionChangeJpaRepositoryWrite;
+    private final SubscriptionApplier applier;
     private final Logger log = LoggerFactory.getLogger(ApplyScheduledPlanService.class);
 
+    private final Counter successCounter;
+    private final Counter errorCounter;
+    private final Timer executionTimer;
+
     public ApplyScheduledPlanService(
-            SubscriptionJpaRepositoryRead subscriptionRead,
-            SubscriptionJpaRepositoryWrite subscriptionWrite,
-            SubscriptionChangeJpaRepositoryRead subscriptionChangeRead, SubscriptionChangeJpaRepositoryWrite subscriptionChangeJpaRepositoryWrite
+            SubscriptionChangeJpaRepositoryRead subscriptionChangeRead,
+            SubscriptionApplier applier,
+            MeterRegistry meterRegistry
     ) {
-        this.subscriptionRead = subscriptionRead;
-        this.subscriptionWrite = subscriptionWrite;
+        this.applier = applier;
         this.subscriptionChangeRead = subscriptionChangeRead;
-        this.subscriptionChangeJpaRepositoryWrite = subscriptionChangeJpaRepositoryWrite;
+
+        this.successCounter = Counter.builder("job.apply_scheduled_plan.success")
+                .description("Successful execution of ApplyScheduledPlan job")
+                .register(meterRegistry);
+
+        this.errorCounter = Counter.builder("job.apply_scheduled_plan.error")
+                .description("Feiled executions of ApplyScheduledPlan job")
+                .register(meterRegistry);
+
+        this.executionTimer = Timer.builder("job.apply_scheduled_plan.duration")
+                .description("Execution time of ApplyScheduledPlan job")
+                .register(meterRegistry);
     }
-    public void execute (){
-        List<SubscriptionChangeEntity> pending = subscriptionChangeRead.findAllPending(LocalDateTime.now());
+
+    public void execute() {
+        executionTimer.record(this::executeInternal);
+    }
+
+    private void executeInternal(){
+        List<SubscriptionChangeEntity> pending =
+                subscriptionChangeRead.findAllPending(LocalDateTime.now());
+
+        int success = 0;
+        int failed = 0;
 
         for (SubscriptionChangeEntity change : pending) {
             try {
-                applyChange(change);
-            }catch (Exception e){
-                log.error("Failed to apply change | changeId={} | error={}", change.getId(), e.getMessage());
+                applier.applyChange(change);
+                success++;
+            } catch (Exception e) {
+                failed++;
+                log.error(
+                        "Failed to apply change | changeId={} | error={}",
+                        change.getId(),
+                        e.getMessage(),
+                        e
+                );
             }
         }
 
+        successCounter.increment(success);
+        errorCounter.increment(failed);
     }
 
-    private void applyChange (SubscriptionChangeEntity change){
-
-        SubscriptionEntity subscription = subscriptionRead.findById(change.getSubscriptionId())
-                .orElseThrow();
-
-        subscription.setPlanId(change.getNewPlanId());
-        subscription.setBillingCycle(change.getNewBillingCycle());
-        subscription.setCurrentPrice(change.getNewPrice());
-
-        subscriptionWrite.save(subscription);
-
-        change.markAsApplied();
-        subscriptionChangeJpaRepositoryWrite.save(change);
-
-        log.info(
-                "Applied scheduled plan change | subscriptionId={} | newPlanId={}",
-                subscription.getId(),
-                change.getNewPlanId()
-        );
-    }
 }
