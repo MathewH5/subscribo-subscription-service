@@ -1,0 +1,17 @@
+spring:
+  config:
+    activate:
+      on-profile: local
+
+server:
+  port: 8080
+
+jobs:
+  apply-scheduled-plan:
+    cron: "0 */1 * * * *"
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

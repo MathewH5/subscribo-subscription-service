@@ -1,0 +1,13 @@
+spring:
+  config:
+    activate:
+      on-profile: uat
+jobs:
+  apply-scheduled-plan:
+    cron: "0 */5 * * * *" # a cada 5 min
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

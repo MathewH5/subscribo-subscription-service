@@ -1,0 +1,17 @@
+spring:
+  config:
+    activate:
+      on-profile: prd
+
+server:
+  port: 8084
+
+jobs:
+  apply-scheduled-plan:
+    cron: "0 */1 * * * *" # a cada 1 min
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

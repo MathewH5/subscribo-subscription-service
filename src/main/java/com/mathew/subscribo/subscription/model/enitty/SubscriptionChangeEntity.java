@@ -40,12 +40,12 @@ public class SubscriptionChangeEntity {
     @Column(name = "applied_at")
     private LocalDateTime appliedAt;
 
-    public boolean isPending() {
-        return appliedAt == null && changedAt.isBefore(LocalDateTime.now());
-    }
-
     public void markAsApplied() {
         this.appliedAt = LocalDateTime.now();
+    }
+
+    public Long getId() {
+        return id;
     }
 
     public Long getSubscriptionId() {
