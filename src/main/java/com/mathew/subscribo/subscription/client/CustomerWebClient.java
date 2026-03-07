@@ -20,6 +20,7 @@ public class CustomerWebClient implements CustomerClient{
         return webClient
                 .get()
                 .uri("/customer/{id}",customerId)
+                .header("X-Service-Caller", "subscription-service")
                 .retrieve()
                 .bodyToMono(CustomerResponse.class)
                 .block();
