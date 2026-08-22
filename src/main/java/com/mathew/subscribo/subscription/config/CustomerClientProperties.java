@@ -7,8 +7,6 @@ import java.time.Duration;
 
 @ConfigurationProperties(prefix = "clients.customer")
 public record CustomerClientProperties(
-        URI baseUrl,
-        Duration connectTimeout,
-        Duration responseTimeout
+        URI baseUrl
 ) {
 }
