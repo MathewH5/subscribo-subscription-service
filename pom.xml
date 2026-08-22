@@ -77,8 +77,22 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-actuator</artifactId>
+
+		</dependency>
+		<dependency>
+			<groupId>au.com.dius.pact.consumer</groupId>
+			<artifactId>junit5</artifactId>
+			<version>4.2.9</version> <!-- Última versão da branch 4.5.x -->
+			<scope>test</scope>
 		</dependency>
 
+		<!-- JUnit 5 -->
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>5.9.2</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>

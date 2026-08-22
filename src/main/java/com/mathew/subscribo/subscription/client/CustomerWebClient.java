@@ -9,7 +9,7 @@ public class CustomerWebClient implements CustomerClient{
 
     private final WebClient webClient;
 
-    public CustomerWebClient(WebClient.Builder webClientBuilder ) {
+    public CustomerWebClient(WebClient.Builder webClientBuilder) {
         this.webClient = webClientBuilder
                 .baseUrl("http://localhost:8080")
                 .build();
