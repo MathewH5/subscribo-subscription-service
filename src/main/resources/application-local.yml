@@ -15,3 +15,9 @@ management:
     web:
       exposure:
         include: health,info,metrics
+
+clients:
+  customer:
+    base-url: ${CUSTOMER_SERVICE_URL:http://localhost:8081}
+    connect-timeout: 3s
+    response-timeout: 2s
