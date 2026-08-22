@@ -17,6 +17,6 @@ spring:
         format_sql: true
     open-in-view: false
 
-  clients:
-    customer:
-      base-url: ${CUSTOMER_SERVICE_URL}
+clients:
+  customer:
+    base-url: ${CUSTOMER_SERVICE_URL}
