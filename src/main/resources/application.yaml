@@ -20,3 +20,5 @@ spring:
 clients:
   customer:
     base-url: ${CUSTOMER_SERVICE_URL}
+    connect-timeout: 3s
+    response-timeout: 2s

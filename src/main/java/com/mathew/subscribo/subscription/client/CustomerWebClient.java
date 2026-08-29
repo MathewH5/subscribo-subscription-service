@@ -4,6 +4,7 @@ import com.mathew.subscribo.subscription.config.CustomerClientProperties;
 import com.mathew.subscribo.subscription.exception.CustomerNotFoundException;
 import com.mathew.subscribo.subscription.exception.CustomerServiceUnavailableException;
 import com.mathew.subscribo.subscription.model.CustomerResponse;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
@@ -11,14 +12,26 @@ import org.springframework.http.HttpStatusCode;
 import org.springframework.web.reactive.function.client.WebClientRequestException;
 import reactor.core.publisher.Mono;
 
+
+import io.netty.channel.ChannelOption;
+import reactor.netty.http.client.HttpClient;
+
 @Component
 public class CustomerWebClient implements CustomerClient{
 
     private final WebClient webClient;
 
-    public CustomerWebClient(WebClient.Builder webClientBuilder, CustomerClientProperties customerClient) {
+    public CustomerWebClient(WebClient.Builder webClientBuilder, CustomerClientProperties properties) {
+        HttpClient httpClient = HttpClient.create()
+                .option(
+                        ChannelOption.CONNECT_TIMEOUT_MILLIS,
+                        Math.toIntExact(properties.connectTimeout().toMillis())
+                )
+                .responseTimeout(properties.responseTimeout());
+
         this.webClient = webClientBuilder
-                .baseUrl(customerClient.baseUrl().toString())
+                .baseUrl(properties.baseUrl().toString())
+                .clientConnector(new ReactorClientHttpConnector(httpClient))
                 .build();
     }
 
