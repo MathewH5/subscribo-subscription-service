@@ -10,6 +10,29 @@ services:
       - "15433:5432"
     volumes:
       - subscription_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U subscription -d subscriptiondb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  subscription-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: subscribo/subscription-service:local
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_PROFILES_ACTIVE: local
+      SERVER_PORT: 8080
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/subscriptiondb
+      SPRING_DATASOURCE_USERNAME: subscription
+      SPRING_DATASOURCE_PASSWORD: subscription123
+      CUSTOMER_SERVICE_URL: http://host.docker.internal:8081
+    depends_on:
+      postgres:
+        condition: service_healthy
 
 volumes:
   subscription_pg_data:
