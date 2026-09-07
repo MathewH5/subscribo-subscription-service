@@ -1,9 +1,11 @@
 package com.mathew.subscribo.subscription.service;
 
+import com.mathew.subscribo.subscription.exception.ConflictException;
 import com.mathew.subscribo.subscription.exception.PlanNotFoundException;
 import com.mathew.subscribo.subscription.exception.SubscriptionNotFoundException;
 import com.mathew.subscribo.subscription.mapper.SubscriptionMapper;
 import com.mathew.subscribo.subscription.model.ChangeSubscriptionPlanRequest;
+import com.mathew.subscribo.subscription.model.ChangeType;
 import com.mathew.subscribo.subscription.model.SubscriptionResponse;
 import com.mathew.subscribo.subscription.model.enitty.PlanEntity;
 import com.mathew.subscribo.subscription.model.enitty.SubscriptionChangeEntity;
@@ -15,36 +17,24 @@ import com.mathew.subscribo.subscription.repository.PlanJpaRepositoryRead;
 import jakarta.transaction.Transactional;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
-
-import static com.mathew.subscribo.subscription.model.BillingCycle.MONTHLY;
-import static com.mathew.subscribo.subscription.model.BillingCycle.YEARLY;
-import static com.mathew.subscribo.subscription.model.ChangeType.DOWNGRADE;
-
 @Service
 public class ChangeSubscriptionPlanService {
-
-    //o servico pode ter upgrade ou downgrade
-    //tem diversos planos que ele pode mudar
-    //como fazer esse gerenciamento
-
-    // preciso de um servico pra mandar pro front qual planos ele pode contratar para poder modficar o dele, tendo validacao e etc
-
-    //o servico vai receber oque?
-    //Novo plano -id do plano
 
     private final SubscriptionMapper subscriptionMapper;
     private final SubscriptionJpaRepositoryRead subscriptionRepositoryRead;
     private final SubscriptionJpaRepositoryWrite subscriptionRepositoryWrite;
     private final PlanJpaRepositoryRead planRepositoryRead;
     private final SubscriptionChangeJpaRepositoryWrite subscriptionChangeRepositoryWrite;
+    private final PlanValidator planValidator;
 
-    public ChangeSubscriptionPlanService(SubscriptionMapper subscriptionMapper, SubscriptionJpaRepositoryRead subscriptionRepositoryRead, SubscriptionJpaRepositoryWrite subscriptionRepositoryWrite, PlanJpaRepositoryRead planRepositoryRead, SubscriptionChangeJpaRepositoryWrite subscriptionChangeRepositoryWrite) {
+
+    public ChangeSubscriptionPlanService(SubscriptionMapper subscriptionMapper, SubscriptionJpaRepositoryRead subscriptionRepositoryRead, SubscriptionJpaRepositoryWrite subscriptionRepositoryWrite, PlanJpaRepositoryRead planRepositoryRead, SubscriptionChangeJpaRepositoryWrite subscriptionChangeRepositoryWrite, PlanValidator planValidator) {
         this.subscriptionMapper = subscriptionMapper;
         this.subscriptionRepositoryRead = subscriptionRepositoryRead;
         this.subscriptionRepositoryWrite = subscriptionRepositoryWrite;
         this.planRepositoryRead = planRepositoryRead;
         this.subscriptionChangeRepositoryWrite = subscriptionChangeRepositoryWrite;
+        this.planValidator = planValidator;
     }
 
 
@@ -54,67 +44,44 @@ public class ChangeSubscriptionPlanService {
                 .orElseThrow(() -> new SubscriptionNotFoundException(id));
 
         PlanEntity entityCurrentPlan = planRepositoryRead.findById(entitySubscription.getPlanId())
-                .orElseThrow(() -> new PlanNotFoundException(id));
+                .orElseThrow(() -> new PlanNotFoundException(entitySubscription.getPlanId()));
 
         PlanEntity entityNewPlan = planRepositoryRead.findById(request.planId())
-                .orElseThrow(() -> new PlanNotFoundException(id));
+                .orElseThrow(() -> new PlanNotFoundException(request.planId()));
 
+        planValidator.validateChange(entityCurrentPlan, entityNewPlan);
 
-        //como vou realizar a validacao para saber se 'e upgrade ou downgrade? (pois busco no bd de plan oque que tem)
-        if (isUpgrade(entityCurrentPlan,entityNewPlan)){
-            return upgrade(entitySubscription, entityNewPlan);
-        }
-        return downgrade(entitySubscription, entityNewPlan, request);
+        return change(entitySubscription, entityNewPlan, request);
     }
 
-    private boolean isUpgrade(PlanEntity current, PlanEntity next) {
-        if (current.getBillingCycle() == MONTHLY && next.getBillingCycle() == YEARLY) {
-            return true;
-        }
-
-        if (current.getBillingCycle().equals(next.getBillingCycle())) {
-            return next.getPrice().compareTo(current.getPrice()) > 0;
-        }
-        return false;
-    }
-
-    private SubscriptionResponse upgrade (SubscriptionEntity entitySubscription, PlanEntity entityNewPlan){
-        // atualiza o plano na hora
-        // cobra proporcioanl oque foi gasto ate o fim do ciclo
-        // o novo sera cobrado por inteiro
-        // ja mudo o plano ou mando para algum lugar para rodar no dia do fim do ciclo?
-
-        entitySubscription.setPlanId(entityNewPlan.getId());
-        entitySubscription.setBillingCycle(entityNewPlan.getBillingCycle());
-        entitySubscription.setCurrentPrice(entityNewPlan.getPrice());
-
-        SubscriptionEntity saved = subscriptionRepositoryWrite.save(entitySubscription);
-
-        return subscriptionMapper.toResponse(saved);
-
-    }
-
-    private SubscriptionResponse downgrade(SubscriptionEntity entitySubscription, PlanEntity entityNewPlan, ChangeSubscriptionPlanRequest request){
+    private SubscriptionResponse change(SubscriptionEntity entitySubscription, PlanEntity entityNewPlan, ChangeSubscriptionPlanRequest request){
         // espera o fim do ciruclo para comecar o novo
 
         entitySubscription.setScheduledPrice(entityNewPlan.getPrice());
-        entitySubscription.setScheduledPlanId(request.planId());
-        entitySubscription.setScheduledBillingCycle(request.scheduledBillingCycle());
+        entitySubscription.setScheduledPlanId(entityNewPlan.getId());
+        entitySubscription.setScheduledBillingCycle(entityNewPlan.getBillingCycle());
 
         SubscriptionEntity saved = subscriptionRepositoryWrite.save(entitySubscription);
 
-        SubscriptionChangeEntity subscriptionChangeEntity = new SubscriptionChangeEntity();
-        subscriptionChangeEntity.setChangedAt(entitySubscription.getNextBillingDate());
-        subscriptionChangeEntity.setSubscriptionId(entitySubscription.getId());
-        subscriptionChangeEntity.setChangeType(DOWNGRADE);
-        subscriptionChangeEntity.setOldPlanId(entitySubscription.getPlanId());
-        subscriptionChangeEntity.setNewPlanId(entitySubscription.getScheduledPlanId());
-        subscriptionChangeEntity.setNewBillingCycle(entityNewPlan.getBillingCycle());
-        subscriptionChangeEntity.setNewPrice(entityNewPlan.getPrice());
+        SubscriptionChangeEntity subscriptionChangeEntity = createSubscriptionChangeEntity(entitySubscription, entityNewPlan);
 
         subscriptionChangeRepositoryWrite.save(subscriptionChangeEntity);
 
         return subscriptionMapper.toResponse(saved);
+    }
+
+    private static SubscriptionChangeEntity createSubscriptionChangeEntity(SubscriptionEntity entitySubscription, PlanEntity entityNewPlan) {
+        SubscriptionChangeEntity subscriptionChangeEntity = new SubscriptionChangeEntity();
+        subscriptionChangeEntity.setChangeType(
+                ChangeType.BILLING_CYCLE_CHANGE
+        );
+        subscriptionChangeEntity.setChangedAt(entitySubscription.getNextBillingDate());
+        subscriptionChangeEntity.setSubscriptionId(entitySubscription.getId());
+        subscriptionChangeEntity.setOldPlanId(entitySubscription.getPlanId());
+        subscriptionChangeEntity.setNewPlanId(entitySubscription.getScheduledPlanId());
+        subscriptionChangeEntity.setNewBillingCycle(entityNewPlan.getBillingCycle());
+        subscriptionChangeEntity.setNewPrice(entityNewPlan.getPrice());
+        return subscriptionChangeEntity;
     }
 
 }

@@ -2,5 +2,6 @@ package com.mathew.subscribo.subscription.model;
 
 public enum ChangeType {
     UPGRADE,
-    DOWNGRADE
+    DOWNGRADE,
+    BILLING_CYCLE_CHANGE
 }

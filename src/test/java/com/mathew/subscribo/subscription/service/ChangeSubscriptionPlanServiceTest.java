@@ -3,6 +3,7 @@ package com.mathew.subscribo.subscription.service;
 import com.mathew.subscribo.subscription.exception.SubscriptionNotFoundException;
 import com.mathew.subscribo.subscription.mapper.SubscriptionMapper;
 import com.mathew.subscribo.subscription.model.ChangeSubscriptionPlanRequest;
+import com.mathew.subscribo.subscription.model.ChangeType;
 import com.mathew.subscribo.subscription.model.enitty.PlanEntity;
 import com.mathew.subscribo.subscription.model.enitty.SubscriptionChangeEntity;
 import com.mathew.subscribo.subscription.model.enitty.SubscriptionEntity;
@@ -19,9 +20,11 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.Optional;
 
 import static com.mathew.subscribo.subscription.model.BillingCycle.MONTHLY;
+import static com.mathew.subscribo.subscription.model.BillingCycle.YEARLY;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -35,9 +38,6 @@ class ChangeSubscriptionPlanServiceTest {
     private SubscriptionMapper subscriptionMapper = new SubscriptionMapper();
 
     @Mock
-    private SubscriptionChangeJpaRepositoryWrite subscriptionChangeJpaRepositoryWrite;
-
-    @Mock
     private SubscriptionJpaRepositoryRead subscriptionRepositoryRead;
 
     @Mock
@@ -46,22 +46,24 @@ class ChangeSubscriptionPlanServiceTest {
     @Mock
     private PlanJpaRepositoryRead planRepositoryRead;
 
+    @Mock
+    private SubscriptionChangeJpaRepositoryWrite subscriptionChangeRepositoryWrite;
+
+    @Mock
+    private PlanValidator planValidator;
+
     @InjectMocks
     private ChangeSubscriptionPlanService changeSubscriptionPlanService;
 
     @Test
-    void shouldThrowExceptionWhenSubscriptionNotFound(){
-        // GIVEN
+    void shouldThrowExceptionWhenSubscriptionNotFound() {
         Long subscriptionId = 1L;
-
         ChangeSubscriptionPlanRequest request =
-                new ChangeSubscriptionPlanRequest(2L, null);
-
+                new ChangeSubscriptionPlanRequest(2L);
 
         when(subscriptionRepositoryRead.findById(subscriptionId))
                 .thenReturn(Optional.empty());
 
-        // WHEN + THEN
         assertThrows(
                 SubscriptionNotFoundException.class,
                 () -> changeSubscriptionPlanService.execute(subscriptionId, request)
@@ -69,30 +71,28 @@ class ChangeSubscriptionPlanServiceTest {
     }
 
     @Test
-    void  shouldUpgradeSubscriptionImmediatelyWhenNewPlanIsMoreExpensive(){
+    void shouldSchedulePlanChangeWhenTargetPlanIsValid() {
         Long subscriptionId = 1L;
+        LocalDateTime nextBillingDate = LocalDateTime.of(2026, 10, 7, 12, 0);
 
-        // subscription atual
         SubscriptionEntity subscription = new SubscriptionEntity();
         subscription.setPlanId(1L);
-        subscription.setCurrentPrice(BigDecimal.valueOf(10));
+        subscription.setCurrentPrice(BigDecimal.valueOf(45.90));
+        subscription.setBillingCycle(MONTHLY);
+        subscription.setNextBillingDate(nextBillingDate);
 
-        // Plano atual
         PlanEntity currentPlan = new PlanEntity();
         currentPlan.setId(1L);
-        currentPlan.setPrice(BigDecimal.valueOf(10));
+        currentPlan.setPrice(BigDecimal.valueOf(45.90));
         currentPlan.setBillingCycle(MONTHLY);
 
-
-        // novo plano (mais caro)
-        PlanEntity newPlan = new PlanEntity();
-        newPlan.setId(2L);
-        newPlan.setPrice(BigDecimal.valueOf(20));
-        newPlan.setBillingCycle(MONTHLY);
-
+        PlanEntity targetPlan = new PlanEntity();
+        targetPlan.setId(2L);
+        targetPlan.setPrice(BigDecimal.valueOf(440.60));
+        targetPlan.setBillingCycle(YEARLY);
 
         ChangeSubscriptionPlanRequest request =
-                new ChangeSubscriptionPlanRequest(2L, MONTHLY);
+                new ChangeSubscriptionPlanRequest(2L);
 
         when(subscriptionRepositoryRead.findById(subscriptionId))
                 .thenReturn(Optional.of(subscription));
@@ -101,78 +101,44 @@ class ChangeSubscriptionPlanServiceTest {
                 .thenReturn(Optional.of(currentPlan));
 
         when(planRepositoryRead.findById(2L))
-                .thenReturn(Optional.of(newPlan));
+                .thenReturn(Optional.of(targetPlan));
 
-        when(subscriptionRepositoryWrite.save(any()))
+        when(subscriptionRepositoryWrite.save(any(SubscriptionEntity.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        when(subscriptionChangeRepositoryWrite.save(any(SubscriptionChangeEntity.class)))
                 .thenAnswer(invocation -> invocation.getArgument(0));
 
         changeSubscriptionPlanService.execute(subscriptionId, request);
 
-        ArgumentCaptor<SubscriptionEntity> captor = ArgumentCaptor.forClass(SubscriptionEntity.class);
-        verify(subscriptionRepositoryWrite).save(captor.capture());
+        verify(planValidator).validateChange(currentPlan, targetPlan);
 
-        SubscriptionEntity entitySalva = captor.getValue();
+        ArgumentCaptor<SubscriptionEntity> subscriptionCaptor =
+                ArgumentCaptor.forClass(SubscriptionEntity.class);
 
-        assertEquals(2L, entitySalva.getPlanId());
-        assertEquals(BigDecimal.valueOf(20), entitySalva.getCurrentPrice());
+        verify(subscriptionRepositoryWrite).save(subscriptionCaptor.capture());
 
+        SubscriptionEntity savedSubscription = subscriptionCaptor.getValue();
+
+        assertEquals(1L, savedSubscription.getPlanId());
+        assertEquals(BigDecimal.valueOf(45.90), savedSubscription.getCurrentPrice());
+
+        assertEquals(2L, savedSubscription.getScheduledPlanId());
+        assertEquals(YEARLY, savedSubscription.getScheduledBillingCycle());
+        assertEquals(BigDecimal.valueOf(440.60), savedSubscription.getScheduledPrice());
+
+        ArgumentCaptor<SubscriptionChangeEntity> changeCaptor =
+                ArgumentCaptor.forClass(SubscriptionChangeEntity.class);
+
+        verify(subscriptionChangeRepositoryWrite).save(changeCaptor.capture());
+
+        SubscriptionChangeEntity savedChange = changeCaptor.getValue();
+
+        assertEquals(1L, savedChange.getOldPlanId());
+        assertEquals(2L, savedChange.getNewPlanId());
+        assertEquals(YEARLY, savedChange.getNewBillingCycle());
+        assertEquals(BigDecimal.valueOf(440.60), savedChange.getNewPrice());
+        assertEquals(nextBillingDate, savedChange.getChangedAt());
+        assertEquals(ChangeType.BILLING_CYCLE_CHANGE, savedChange.getChangeType());
     }
-
-    @Test
-    void shouldSchedulePlanChangeWhenNewPlanIsCheaper(){
-        Long subscriptionId = 1L;
-
-        // subscription atual
-        SubscriptionEntity subscription = new SubscriptionEntity();
-        subscription.setPlanId(2L);
-        subscription.setCurrentPrice(BigDecimal.valueOf(20));
-
-        // Plano atual
-        PlanEntity currentPlan = new PlanEntity();
-        currentPlan.setId(2L);
-        currentPlan.setPrice(BigDecimal.valueOf(20));
-        currentPlan.setBillingCycle(MONTHLY);
-
-        // novo plano (mais barato)
-        PlanEntity newPlan = new PlanEntity();
-        newPlan.setId(1L);
-        newPlan.setPrice(BigDecimal.valueOf(10));
-        newPlan.setBillingCycle(MONTHLY);
-
-        ChangeSubscriptionPlanRequest request =
-                new ChangeSubscriptionPlanRequest(1L, MONTHLY);
-
-        when(subscriptionRepositoryRead.findById(1L))
-                .thenReturn(Optional.of(subscription));
-
-        when(planRepositoryRead.findById(2l))
-                .thenReturn(Optional.of(currentPlan));
-
-        when(planRepositoryRead.findById(1l))
-                .thenReturn(Optional.of(newPlan));
-
-        when(subscriptionChangeJpaRepositoryWrite.save(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        when(subscriptionRepositoryWrite.save(any()))
-                .thenAnswer(invocation -> invocation.getArgument(0));
-
-        changeSubscriptionPlanService.execute(subscriptionId, request);
-
-        ArgumentCaptor<SubscriptionChangeEntity> changeCaptor = ArgumentCaptor.forClass(SubscriptionChangeEntity.class);
-        verify(subscriptionChangeJpaRepositoryWrite).save(changeCaptor.capture());
-        assertEquals(2L, changeCaptor.getValue().getOldPlanId());
-        assertEquals(1L, changeCaptor.getValue().getNewPlanId());
-
-        ArgumentCaptor<SubscriptionEntity> captor2 = ArgumentCaptor.forClass(SubscriptionEntity.class);
-        verify(subscriptionRepositoryWrite).save(captor2.capture());
-
-        SubscriptionEntity entitySalva = captor2.getValue();
-        assertEquals(2L, entitySalva.getPlanId());
-        assertEquals(1L, entitySalva.getScheduledPlanId());
-        assertEquals(BigDecimal.valueOf(20), entitySalva.getCurrentPrice());
-        assertEquals(BigDecimal.valueOf(10), entitySalva.getScheduledPrice());
-
-    }
-
 }

@@ -18,6 +18,9 @@ public class PlanEntity {
     @Column (nullable = false)
     private String name;
 
+    @Column(name = "product_code", nullable = false)
+    private String productCode;
+
     @Column
     private String description;
 
@@ -89,4 +92,7 @@ public class PlanEntity {
         this.status = status;
     }
 
+    public String getProductCode() {
+        return productCode;
+    }
 }

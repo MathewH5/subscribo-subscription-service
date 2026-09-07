@@ -15,6 +15,7 @@ public class PlanMapper {
                 entity.getId(),
                 entity.getName(),
                 entity.getDescription(),
+                entity.getProductCode(),
                 entity.getPrice(),
                 entity.getBillingCycle(),
                 entity.getStatus(),
